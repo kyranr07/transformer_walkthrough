@@ -1,2 +1,2 @@
 # transformer_walkthrough
-An overview of the transformer process
+An interactive overview of the transformer process
