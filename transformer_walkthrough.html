@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transformer Walkthrough</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #2F3167;
+    --navy-dark: #1B1E4A;
+    --navy-light: #3d4191;
+    --yellow: #FEC214;
+    --white: #FFFFFF;
+    --off-white: #F4F5FF;
+    --grey: #8B8FAD;
+    --light-grey: #E8E9F5;
+    --success: #4CAF50;
+    --token-colors: #FF6B6B, #4ECDC4, #FFE66D, #A29BFE, #FD79A8, #6C5CE7, #00B894, #E17055;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy-dark);
+    color: var(--white);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    animation: fadeDown 0.6s ease both;
+  }
+  .header .eyebrow {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--yellow);
+    margin-bottom: 8px;
+  }
+  .header h1 {
+    font-size: clamp(22px, 4vw, 32px);
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+  }
+  .header p {
+    margin-top: 8px;
+    color: var(--grey);
+    font-size: 15px;
+    font-weight: 300;
+  }
+
+  /* Sentence picker */
+  #picker {
+    width: 100%;
+    max-width: 680px;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+  .pick-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--grey);
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .sentence-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sentence-card {
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 18px 22px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .sentence-card:hover {
+    background: rgba(254,194,20,0.08);
+    border-color: var(--yellow);
+    transform: translateX(4px);
+  }
+  .sentence-card .num {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--yellow);
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 24px;
+  }
+  .sentence-card .text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--white);
+    line-height: 1.4;
+  }
+  .sentence-card .text em {
+    color: var(--grey);
+    font-style: normal;
+  }
+
+  /* Main tool */
+  #tool {
+    width: 100%;
+    max-width: 740px;
+    display: none;
+  }
+
+  /* Step progress bar */
+  .progress-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 28px;
+    animation: fadeDown 0.4s ease both;
+  }
+  .step-pip {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+  .step-pip:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: rgba(255,255,255,0.1);
+    z-index: 0;
+    transition: background 0.4s;
+  }
+  .step-pip.done:not(:last-child)::after {
+    background: var(--yellow);
+  }
+  .pip-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--grey);
+    background: var(--navy-dark);
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
+  }
+  .step-pip.active .pip-circle {
+    border-color: var(--yellow);
+    color: var(--yellow);
+    box-shadow: 0 0 0 4px rgba(254,194,20,0.15);
+  }
+  .step-pip.done .pip-circle {
+    background: var(--yellow);
+    border-color: var(--yellow);
+    color: var(--navy-dark);
+  }
+  .pip-label {
+    font-size: 10px;
+    color: var(--grey);
+    text-align: center;
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .step-pip.active .pip-label { color: var(--yellow); }
+
+  /* Sentence display */
+  .sentence-display {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--grey);
+    margin-bottom: 20px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    border-left: 3px solid var(--yellow);
+  }
+  .sentence-display span { color: var(--white); font-weight: 700; }
+
+  /* Card */
+  .step-card {
+    background: rgba(255,255,255,0.04);
+    border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    margin-bottom: 16px;
+    min-height: 220px;
+    position: relative;
+    overflow: hidden;
+  }
+  .step-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--yellow), transparent);
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .step-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    background: var(--yellow);
+    color: var(--navy-dark);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .step-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--white);
+  }
+
+  /* Step content areas */
+  .step-content { min-height: 120px; }
+
+  /* STEP 1 - Tokens */
+  .tokens-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .token-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: tokenPop 0.35s ease forwards;
+  }
+  .token-word {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 8px;
+    color: var(--navy-dark);
+  }
+  .token-id {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--grey);
+  }
+
+  /* STEP 2 - Embeddings */
+  .embeddings-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .embedding-item {
+    opacity: 0;
+    animation: fadeUp 0.4s ease forwards;
+  }
+  .embedding-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .embedding-numbers {
+    display: flex;
+    gap: 3px;
+  }
+  .emb-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    color: var(--off-white);
+    transition: all 0.3s;
+    min-width: 38px;
+    text-align: center;
+  }
+  .emb-num.highlight {
+    background: rgba(254,194,20,0.25);
+    color: var(--yellow);
+  }
+
+  /* STEP 3 - Attention */
+  .attention-container {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .attention-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    opacity: 0;
+    animation: fadeIn 0.4s ease forwards;
+  }
+  .att-word {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    width: 90px;
+    flex-shrink: 0;
+    text-align: right;
+    padding-right: 10px;
+    border-right: 2px solid rgba(255,255,255,0.1);
+  }
+  .att-bars {
+    display: flex;
+    gap: 5px;
+    flex: 1;
+  }
+  .att-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+  }
+  .att-bar {
+    height: 28px;
+    border-radius: 4px;
+    width: 100%;
+    transition: width 0.6s ease;
+    min-width: 4px;
+  }
+  .att-bar-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--grey);
+    text-align: center;
+    word-break: break-all;
+    max-width: 50px;
+  }
+
+  /* STEP 4 - Prediction */
+  .prediction-area {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .nn-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 0;
+  }
+  .nn-layer {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+  }
+  .nn-node {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.25);
+    transition: all 0.2s;
+  }
+  .nn-node.active {
+    background: var(--yellow);
+    border-color: var(--yellow);
+    box-shadow: 0 0 8px rgba(254,194,20,0.5);
+  }
+  .nn-arrow {
+    color: var(--grey);
+    font-size: 20px;
+    line-height: 1;
+  }
+  .prediction-word {
+    text-align: center;
+    opacity: 0;
+    transform: scale(0.7);
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .prediction-word.show {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .pred-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--grey);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .pred-word {
+    font-family: 'Space Mono', monospace;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--yellow);
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .pred-reason {
+    font-size: 14px;
+    color: var(--grey);
+    max-width: 420px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+  .pred-reason strong { color: var(--white); }
+
+  /* Caption */
+  .step-caption {
+    background: rgba(254,194,20,0.08);
+    border: 1px solid rgba(254,194,20,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--off-white);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .step-caption strong { color: var(--yellow); }
+
+  /* Nav buttons */
+  .nav-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.3px;
+  }
+  .btn-primary {
+    background: var(--yellow);
+    color: var(--navy-dark);
+    flex: 1;
+    max-width: 200px;
+  }
+  .btn-primary:hover { background: #ffe066; transform: translateY(-1px); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--grey);
+    border: 1.5px solid rgba(255,255,255,0.1);
+  }
+  .btn-secondary:hover { color: var(--white); border-color: rgba(255,255,255,0.3); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  .restart-btn {
+    background: transparent;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    color: var(--grey);
+    font-size: 13px;
+    padding: 10px 18px;
+  }
+  .restart-btn:hover { border-color: var(--grey); color: var(--white); }
+
+  /* Animations */
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  @keyframes tokenPop { from { opacity:0; transform:translateY(10px) scale(0.9); } to { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(254,194,20,0.4); } 50% { box-shadow: 0 0 0 8px rgba(254,194,20,0); } }
+
+  .pulsing { animation: pulse 1.2s ease infinite; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="eyebrow">Interactive Demo</div>
+  <h1>How Does a Transformer Work?</h1>
+  <p>Pick a sentence and watch it flow through each step</p>
+</div>
+
+<!-- Sentence picker -->
+<div id="picker">
+  <div class="pick-label">Choose a sentence to process</div>
+  <div class="sentence-cards">
+    <div class="sentence-card" onclick="selectSentence(0)">
+      <span class="num">01</span>
+      <span class="text">The cat sat on the <em>___</em></span>
+    </div>
+    <div class="sentence-card" onclick="selectSentence(1)">
+      <span class="num">02</span>
+      <span class="text">Neural networks learn patterns from <em>___</em></span>
+    </div>
+    <div class="sentence-card" onclick="selectSentence(2)">
+      <span class="num">03</span>
+      <span class="text">ChatGPT uses attention to understand <em>___</em></span>
+    </div>
+  </div>
+</div>
+
+<!-- Main tool -->
+<div id="tool">
+
+  <!-- Progress bar -->
+  <div class="progress-bar" id="progressBar">
+    <div class="step-pip active" id="pip-0">
+      <div class="pip-circle">1</div>
+      <div class="pip-label">Tokens</div>
+    </div>
+    <div class="step-pip" id="pip-1">
+      <div class="pip-circle">2</div>
+      <div class="pip-label">Embeddings</div>
+    </div>
+    <div class="step-pip" id="pip-2">
+      <div class="pip-circle">3</div>
+      <div class="pip-label">Attention</div>
+    </div>
+    <div class="step-pip" id="pip-3">
+      <div class="pip-circle">4</div>
+      <div class="pip-label">Prediction</div>
+    </div>
+  </div>
+
+  <!-- Sentence display -->
+  <div class="sentence-display" id="sentenceDisplay"></div>
+
+  <!-- Step card -->
+  <div class="step-card" id="stepCard">
+    <div class="step-header">
+      <div class="step-badge" id="stepBadge">Step 1</div>
+      <div class="step-title" id="stepTitle"></div>
+    </div>
+    <div class="step-content" id="stepContent"></div>
+  </div>
+
+  <!-- Caption -->
+  <div class="step-caption" id="stepCaption"></div>
+
+  <!-- Nav -->
+  <div class="nav-row">
+    <button class="btn btn-secondary restart-btn" onclick="restart()">↩ Pick another</button>
+    <button class="btn btn-primary" id="nextBtn" onclick="nextStep()">Next →</button>
+  </div>
+
+</div>
+
+<script>
+const SENTENCES = [
+  {
+    text: "The cat sat on the ___",
+    display: "The cat sat on the",
+    tokens: [
+      { word: "The",  id: "464"  },
+      { word: "cat",  id: "8415" },
+      { word: "sat",  id: "9813" },
+      { word: "on",   id: "319"  },
+      { word: "the",  id: "279"  },
+    ],
+    tokenColors: ["#FF6B6B","#4ECDC4","#FFE66D","#A29BFE","#FD79A8"],
+    embeddings: [
+      { word: "The",  nums: ["0.12","-0.43","0.87","0.05","-0.61"] },
+      { word: "cat",  nums: ["0.89","0.72","-0.11","0.54","-0.30"], highlight: [0,1] },
+      { word: "sat",  nums: ["-0.22","0.61","0.43","-0.88","0.17"], highlight: [1,2] },
+      { word: "on",   nums: ["0.05","-0.14","0.92","0.38","-0.55"] },
+      { word: "the",  nums: ["0.11","-0.41","0.85","0.07","-0.63"] },
+    ],
+    attention: [
+      { word: "cat",  bars: [0.05, 0.85, 0.55, 0.10, 0.20] },
+      { word: "sat",  bars: [0.10, 0.75, 0.90, 0.15, 0.10] },
+      { word: "the²", bars: [0.15, 0.80, 0.70, 0.20, 0.95] },
+    ],
+    attWords: ["The","cat","sat","on","the"],
+    prediction: "mat",
+    reason: "\"cat\" and \"sat\" strongly attended to each other. The model learned from millions of sentences that cats sit on mats — so <strong>mat</strong> has the highest probability next.",
+  },
+  {
+    text: "Neural networks learn patterns from ___",
+    display: "Neural networks learn patterns from",
+    tokens: [
+      { word: "Neural",   id: "29368" },
+      { word: "networks", id: "14119" },
+      { word: "learn",    id: "4435"  },
+      { word: "patterns", id: "14601" },
+      { word: "from",     id: "505"   },
+    ],
+    tokenColors: ["#6C5CE7","#00B894","#FEC214","#E17055","#74B9FF"],
+    embeddings: [
+      { word: "Neural",   nums: ["0.77","0.55","-0.20","0.61","0.38"], highlight: [0,1] },
+      { word: "networks", nums: ["0.81","0.60","-0.15","0.55","0.42"], highlight: [0,1] },
+      { word: "learn",    nums: ["-0.10","0.44","0.93","-0.22","0.16"], highlight: [2] },
+      { word: "patterns", nums: ["0.33","0.71","0.48","-0.60","0.29"] },
+      { word: "from",     nums: ["0.04","-0.31","0.12","0.80","-0.44"] },
+    ],
+    attention: [
+      { word: "Neural",   bars: [0.90, 0.88, 0.30, 0.40, 0.10] },
+      { word: "networks", bars: [0.85, 0.92, 0.35, 0.45, 0.12] },
+      { word: "patterns", bars: [0.40, 0.45, 0.70, 0.95, 0.20] },
+    ],
+    attWords: ["Neural","networks","learn","patterns","from"],
+    prediction: "data",
+    reason: "\"Neural\", \"networks\", and \"patterns\" all strongly attended to each other. The model learned that this phrase almost always precedes <strong>data</strong> — the source of patterns.",
+  },
+  {
+    text: "ChatGPT uses attention to understand ___",
+    display: "ChatGPT uses attention to understand",
+    tokens: [
+      { word: "Chat",      id: "14126" },
+      { word: "GPT",       id: "38144" },
+      { word: "uses",      id: "4960"  },
+      { word: "attention", id: "14267" },
+      { word: "to",        id: "311"   },
+    ],
+    tokenColors: ["#FD79A8","#FDCB6E","#55EFC4","#A29BFE","#FF7675"],
+    embeddings: [
+      { word: "Chat",      nums: ["0.65","0.70","-0.25","0.50","0.35"], highlight: [0,1] },
+      { word: "GPT",       nums: ["0.68","0.72","-0.22","0.53","0.38"], highlight: [0,1] },
+      { word: "uses",      nums: ["0.02","-0.14","0.50","0.30","-0.60"] },
+      { word: "attention", nums: ["0.80","0.60","0.45","-0.20","0.75"], highlight: [3,4] },
+      { word: "to",        nums: ["0.08","-0.29","0.17","0.66","-0.40"] },
+    ],
+    attention: [
+      { word: "Chat",      bars: [0.95, 0.92, 0.20, 0.55, 0.10] },
+      { word: "GPT",       bars: [0.92, 0.95, 0.22, 0.58, 0.12] },
+      { word: "attention", bars: [0.60, 0.62, 0.30, 0.90, 0.20] },
+    ],
+    attWords: ["Chat","GPT","uses","attention","to"],
+    prediction: "context",
+    reason: "\"Chat\", \"GPT\" and \"attention\" attended strongly to each other. The model learned that transformers use attention to resolve <strong>context</strong> — the meaning of words in relation to others.",
+  },
+];
+
+let currentSentence = null;
+let currentStep = 0;
+const TOTAL_STEPS = 4;
+
+const CAPTIONS = [
+  s => `<strong>Tokenization:</strong> The sentence is split into ${s.tokens.length} tokens. Each token gets a unique ID — this is how the model tracks words as numbers.`,
+  s => `<strong>Embeddings:</strong> Each token is converted into a list of numbers. Highlighted values capture key features — words with similar meanings have similar numbers.`,
+  s => `<strong>Attention:</strong> The model figures out which words matter most for each other. Longer bars mean stronger attention — the model is deciding what to focus on.`,
+  s => `<strong>Prediction:</strong> Neural net layers process the attention-enriched embeddings and output a probability for every word in the vocabulary. The highest-probability word wins.`,
+];
+
+const TITLES = [
+  "Break text into tokens",
+  "Represent tokens as embeddings",
+  "Use attention to understand context",
+  "Use neural net layers to predict",
+];
+
+function selectSentence(idx) {
+  currentSentence = SENTENCES[idx];
+  currentStep = 0;
+  document.getElementById('picker').style.display = 'none';
+  const tool = document.getElementById('tool');
+  tool.style.display = 'block';
+  tool.style.animation = 'fadeUp 0.4s ease both';
+
+  document.getElementById('sentenceDisplay').innerHTML =
+    `Sentence: <span>"${currentSentence.display} ___"</span>`;
+
+  renderStep();
+}
+
+function renderStep() {
+  const s = currentSentence;
+
+  // Update progress pips
+  for (let i = 0; i < TOTAL_STEPS; i++) {
+    const pip = document.getElementById(`pip-${i}`);
+    pip.className = 'step-pip' +
+      (i < currentStep ? ' done' : '') +
+      (i === currentStep ? ' active' : '');
+    if (i < currentStep) {
+      pip.querySelector('.pip-circle').innerHTML = '✓';
+    } else {
+      pip.querySelector('.pip-circle').textContent = i + 1;
+    }
+  }
+
+  document.getElementById('stepBadge').textContent = `Step ${currentStep + 1}`;
+  document.getElementById('stepTitle').textContent = TITLES[currentStep];
+  document.getElementById('stepCaption').innerHTML = CAPTIONS[currentStep](s);
+
+  const content = document.getElementById('stepContent');
+  content.innerHTML = '';
+
+  if (currentStep === 0) renderTokens(content, s);
+  else if (currentStep === 1) renderEmbeddings(content, s);
+  else if (currentStep === 2) renderAttention(content, s);
+  else if (currentStep === 3) renderPrediction(content, s);
+
+  const nextBtn = document.getElementById('nextBtn');
+  if (currentStep === TOTAL_STEPS - 1) {
+    nextBtn.textContent = '✓ Done';
+    nextBtn.onclick = restart;
+  } else {
+    nextBtn.textContent = 'Next →';
+    nextBtn.onclick = nextStep;
+  }
+}
+
+function renderTokens(container, s) {
+  const row = document.createElement('div');
+  row.className = 'tokens-row';
+  s.tokens.forEach((t, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'token-chip';
+    chip.style.animationDelay = `${i * 0.1}s`;
+    chip.innerHTML = `
+      <div class="token-word" style="background:${s.tokenColors[i]}">${t.word}</div>
+      <div class="token-id">ID: ${t.id}</div>
+    `;
+    row.appendChild(chip);
+  });
+  container.appendChild(row);
+}
+
+function renderEmbeddings(container, s) {
+  const grid = document.createElement('div');
+  grid.className = 'embeddings-grid';
+  s.embeddings.forEach((e, i) => {
+    const item = document.createElement('div');
+    item.className = 'embedding-item';
+    item.style.animationDelay = `${i * 0.1}s`;
+    const hl = e.highlight || [];
+    const numsHtml = e.nums.map((n, j) =>
+      `<div class="emb-num ${hl.includes(j) ? 'highlight' : ''}">${n}</div>`
+    ).join('');
+    item.innerHTML = `
+      <div class="embedding-label" style="color:${currentSentence.tokenColors[i]}">${e.word}</div>
+      <div class="embedding-numbers">${numsHtml}</div>
+    `;
+    grid.appendChild(item);
+  });
+  container.appendChild(grid);
+}
+
+function renderAttention(container, s) {
+  const wrap = document.createElement('div');
+  wrap.className = 'attention-container';
+
+  const maxBars = s.attWords.length;
+  const colors = s.tokenColors;
+
+  s.attention.forEach((row, ri) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'attention-row';
+    rowEl.style.animationDelay = `${ri * 0.15}s`;
+
+    const wordEl = document.createElement('div');
+    wordEl.className = 'att-word';
+    wordEl.textContent = row.word;
+    wordEl.style.color = colors[ri] || '#fff';
+    rowEl.appendChild(wordEl);
+
+    const barsEl = document.createElement('div');
+    barsEl.className = 'att-bars';
+
+    row.bars.forEach((val, bi) => {
+      const bw = document.createElement('div');
+      bw.className = 'att-bar-wrap';
+      const bar = document.createElement('div');
+      bar.className = 'att-bar';
+      bar.style.background = colors[bi] || '#aaa';
+      bar.style.opacity = 0.3 + val * 0.7;
+      bar.style.transform = `scaleY(${0.3 + val * 0.7})`;
+      bar.style.transition = `transform 0.6s ${bi * 0.08}s ease`;
+      const lbl = document.createElement('div');
+      lbl.className = 'att-bar-label';
+      lbl.textContent = s.attWords[bi];
+      bw.appendChild(bar);
+      bw.appendChild(lbl);
+      barsEl.appendChild(bw);
+    });
+
+    rowEl.appendChild(barsEl);
+    wrap.appendChild(rowEl);
+  });
+
+  container.appendChild(wrap);
+}
+
+function renderPrediction(container, s) {
+  const area = document.createElement('div');
+  area.className = 'prediction-area';
+
+  // Neural net visual
+  const nn = document.createElement('div');
+  nn.className = 'nn-visual';
+  const layers = [4, 6, 6, 4];
+  layers.forEach((count, li) => {
+    const layer = document.createElement('div');
+    layer.className = 'nn-layer';
+    for (let n = 0; n < count; n++) {
+      const node = document.createElement('div');
+      node.className = 'nn-node';
+      layer.appendChild(node);
+    }
+    nn.appendChild(layer);
+    if (li < layers.length - 1) {
+      const arrow = document.createElement('div');
+      arrow.className = 'nn-arrow';
+      arrow.textContent = '→';
+      nn.appendChild(arrow);
+    }
+  });
+  area.appendChild(nn);
+
+  // Animate nodes
+  setTimeout(() => {
+    const nodes = nn.querySelectorAll('.nn-node');
+    nodes.forEach((n, i) => {
+      setTimeout(() => {
+        n.classList.add('active', 'pulsing');
+        setTimeout(() => n.classList.remove('pulsing'), 1200);
+      }, i * 60);
+    });
+  }, 100);
+
+  // Prediction reveal
+  const pred = document.createElement('div');
+  pred.className = 'prediction-word';
+  pred.innerHTML = `
+    <div class="pred-label">Predicted next word</div>
+    <div class="pred-word">${s.prediction}</div>
+    <div class="pred-reason">${s.reason}</div>
+  `;
+  area.appendChild(pred);
+  container.appendChild(area);
+
+  setTimeout(() => pred.classList.add('show'), 800);
+}
+
+function nextStep() {
+  if (currentStep < TOTAL_STEPS - 1) {
+    currentStep++;
+    renderStep();
+  }
+}
+
+function restart() {
+  currentStep = 0;
+  currentSentence = null;
+  document.getElementById('tool').style.display = 'none';
+  document.getElementById('picker').style.display = 'block';
+}
+</script>
+</body>
+</html>
